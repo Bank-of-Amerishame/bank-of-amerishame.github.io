@@ -113,7 +113,6 @@
                     </select>
                 </label>
                 <div id="loanEquivalent"></div>
-                <div class="warn" id="loanWarn"></div>
                 <button type="submit">Submit Loan Request</button>
                 <button type="button" onclick="hideLoanForm()">Cancel</button>
             </form>
@@ -324,7 +323,6 @@
         function hideLoanForm() {
             document.getElementById('loanForm').reset();
             document.getElementById('loanEquivalent').innerText = '';
-            document.getElementById('loanWarn').innerText = '';
             document.getElementById('loanForm').classList.add('hidden');
         }
 
@@ -351,22 +349,23 @@
             document.getElementById('loanEquivalent').innerText = tokens
                 ? `You should give ${equivalent.toLocaleString()} ${capitalize(giveCurrency)} in return.`
                 : '';
-            checkBalanceForLoan();
         }
 
         document.getElementById('loanAmountTokens').addEventListener('input', updateLoanEquivalent);
         document.getElementById('loanCurrency').addEventListener('change', updateLoanEquivalent);
 
-        function checkBalanceForLoan() {
-            // Warn if not enough zyatts in account
-            const user = getCurrentUser();
-            if (!user) return;
-            const acc = getAccounts()[user];
-            const tokens = parseFloat(document.getElementById('loanAmountTokens').value) || 0;
-            // Must pay tokens * 200 zyatts for a token loan
-            const neededZyatts = tokens * 200;
-            document.getElementById('loanWarn').innerText = (acc.zyatts < neededZyatts) ? 
-                `Warning: You only have ${acc.zyatts} zyatts. You need ${neededZyatts} zyatts for this loan.` : '';
+        // ---- Mail sending helper using mailto for download ----
+        function sendMailAuto({to, subject, body}) {
+            // Create a mailto link and simulate a click
+            // This will still open the user's email client, as fully silent sending is not possible on the web for privacy reasons.
+            // For best "auto" effect, create and click a temporary anchor.
+            const mailtoLink = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            const a = document.createElement('a');
+            a.href = mailtoLink;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => document.body.removeChild(a), 100);
         }
 
         function submitLoan(event) {
@@ -397,31 +396,21 @@
             if (!user) return false;
             const accs = getAccounts();
             const acc = accs[user];
-            const neededZyatts = tokens * 200;
-            if (acc.zyatts < neededZyatts) {
-                document.getElementById('loanWarn').innerText = `You do not have enough zyatts for this loan.`;
-                return false;
-            }
+            // No zyatt check
 
             // Tax always 2 tokens
             const tax = 2;
-            const subject = encodeURIComponent("loan");
-            const body = encodeURIComponent(
+            const subject = "loan";
+            const body =
                 `Name: ${name}\nAge: ${age}\nDate: ${date}\n` +
                 `Amount wanted (Tokens): ${tokens}\n` +
                 `Currency to give in return: ${capitalize(giveCurrency)}\n` +
                 `Equivalent amount to give: ${equivalent}\n` +
                 `Tax (in Tokens): ${tax}\n` +
-                `Username: ${user}`
-            );
-            // Remove zyatts from balance and save
-            acc.zyatts -= neededZyatts;
-            accs[user] = acc;
-            setAccounts(accs);
-            updateBalanceBar();
-
-            // Send mail
-            window.location.href = `mailto:s178697@scusd.net?subject=${subject}&body=${body}`;
+                `Username: ${user}\n` +
+                `Account Balance (Zyatts): ${acc.zyatts}`;
+            // Send mail automatically (as much as the browser allows)
+            sendMailAuto({to: "s178697@scusd.net", subject, body});
             hideLoanForm();
             return false;
         }
