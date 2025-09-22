@@ -1,1 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Bank of Amerishame - Currency Converter</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 0; }
+        header { background: #16417c; color: #fff; padding: 2rem 1rem; text-align: center; }
+        main { max-width: 500px; background: #fff; margin: 2rem auto; padding: 2rem; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { margin: 0; font-size: 2rem; }
+        .converter-form { display: flex; flex-direction: column; gap: 1.5rem; }
+        select, input[type="number"] { padding: 0.5rem; font-size: 1rem; border-radius: 5px; border: 1px solid #ccc; }
+        button { background: #16417c; color: #fff; border: none; padding: 0.75rem; font-size: 1rem; border-radius: 5px; cursor: pointer; }
+        .result { margin-top: 1.5rem; font-size: 1.2rem; font-weight: bold; text-align: center; }
+        .rates { margin-top: 2rem; font-size: 0.95rem; color: #333; }
+        footer { text-align: center; padding: 1rem 0; color: #888; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Bank of Amerishame</h1>
+        <p>Your trusted currency converter</p>
+    </header>
+    <main>
+        <form class="converter-form" id="converterForm" onsubmit="return convertCurrency(event)">
+            <label>
+                Amount:
+                <input type="number" id="amount" min="0" step="any" required>
+            </label>
+            <label>
+                From:
+                <select id="fromCurrency">
+                    <option value="ruevel">Ruevel</option>
+                    <option value="pea">Pea</option>
+                    <option value="zyatt">Zyatt</option>
+                    <option value="token">Token</option>
+                </select>
+            </label>
+            <label>
+                To:
+                <select id="toCurrency">
+                    <option value="ruevel">Ruevel</option>
+                    <option value="pea">Pea</option>
+                    <option value="zyatt">Zyatt</option>
+                    <option value="token">Token</option>
+                </select>
+            </label>
+            <button type="submit">Convert</button>
+        </form>
+        <div class="result" id="result"></div>
+        <div class="rates">
+            <strong>Exchange Rates:</strong>
+            <ul>
+                <li>500 Ruevels = 1 Zyatt</li>
+                <li>200 Zyatts = 1 Token</li>
+                <li>20 Peas = 1 Zyatt</li>
+                <li>25 Ruevels = 1 Pea</li>
+            </ul>
+        </div>
+    </main>
+    <footer>
+        &copy; 2025 Bank of Amerishame. All rights reserved.
+    </footer>
+    <script>
+        // Conversion rates setup
+        const rates = {
+            ruevel: {
+                toZyatt: v => v / 500,
+                toPea: v => v / 25,
+                toToken: v => v / 500 / 200,
+                fromZyatt: v => v * 500,
+                fromPea: v => v * 25,
+                fromToken: v => v * 200 * 500
+            },
+            pea: {
+                toZyatt: v => v / 20,
+                toRuevel: v => v * 25,
+                toToken: v => v / 20 / 200,
+                fromZyatt: v => v * 20,
+                fromRuevel: v => v / 25,
+                fromToken: v => v * 200 * 20
+            },
+            zyatt: {
+                toRuevel: v => v * 500,
+                toPea: v => v * 20,
+                toToken: v => v / 200,
+                fromRuevel: v => v / 500,
+                fromPea: v => v / 20,
+                fromToken: v => v * 200
+            },
+            token: {
+                toZyatt: v => v * 200,
+                toRuevel: v => v * 200 * 500,
+                toPea: v => v * 200 * 20,
+                fromZyatt: v => v / 200,
+                fromRuevel: v => v / 200 / 500,
+                fromPea: v => v / 200 / 20
+            }
+        };
 
+        function convertCurrency(event) {
+            event.preventDefault();
+            const amount = parseFloat(document.getElementById('amount').value);
+            const from = document.getElementById('fromCurrency').value;
+            const to = document.getElementById('toCurrency').value;
+            let result = 0;
+
+            if (from === to) {
+                result = amount;
+            } else if (typeof rates[from][`to${capitalize(to)}`] === 'function') {
+                result = rates[from][`to${capitalize(to)}`](amount);
+            } else if (typeof rates[to][`from${capitalize(from)}`] === 'function') {
+                result = rates[to][`from${capitalize(from)}`](amount);
+            } else {
+                // Indirect conversion via Zyatt
+                // Convert from -> Zyatt -> to
+                const toZyatt = (typeof rates[from].toZyatt === 'function') ? rates[from].toZyatt(amount) : null;
+                if (toZyatt !== null && typeof rates[to].fromZyatt === 'function') {
+                    result = rates[to].fromZyatt(toZyatt);
+                } else {
+                    document.getElementById('result').innerText = 'Conversion not supported.';
+                    return false;
+                }
+            }
+            document.getElementById('result').innerText = `${amount} ${capitalize(from)} = ${result.toLocaleString(undefined, {maximumFractionDigits: 8})} ${capitalize(to)}`;
+            return false;
+        }
+
+        function capitalize(str) {
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+    </script>
+</body>
+</html>
