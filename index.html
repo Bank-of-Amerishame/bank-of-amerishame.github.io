@@ -20,6 +20,7 @@
         .user-bar { text-align: right; margin-bottom: 1rem; }
         .user-bar span { margin-right: 1rem; }
         .warn { color: #c00; }
+        .err { color: #c00; margin-bottom: 1rem; }
         footer { text-align: center; padding: 1rem 0; color: #888; }
     </style>
 </head>
@@ -35,9 +36,14 @@
         <div class="balance" id="balanceBar"></div>
         
         <form class="auth-form" id="authForm" onsubmit="return handleAuth(event)">
+            <div class="err" id="authErr"></div>
             <label>
                 Username:
-                <input type="text" id="authUsername" required>
+                <input type="text" id="authUsername" required autocomplete="username">
+            </label>
+            <label>
+                Password:
+                <input type="password" id="authPassword" required autocomplete="current-password">
             </label>
             <button type="submit" id="authBtn">Login / Sign Up</button>
         </form>
@@ -197,6 +203,7 @@
 
         function showAuthForm(show=true) {
             document.getElementById("authForm").classList.toggle("hidden", !show);
+            document.getElementById("authErr").innerText = "";
         }
         function showBankFeatures(show=true) {
             document.getElementById("converterForm").classList.toggle("hidden", !show);
@@ -206,15 +213,39 @@
         function handleAuth(event) {
             event.preventDefault();
             const username = document.getElementById("authUsername").value.trim();
-            if (!username) return false;
+            const password = document.getElementById("authPassword").value;
+            const err = document.getElementById("authErr");
+            err.innerText = "";
+            if (!username || !password) {
+                err.innerText = "Please provide both username and password.";
+                return false;
+            }
             let accounts = getAccounts();
             let acc = accounts[username];
+
+            // If new account, create it with special zyatt balances if special users
             if (!acc) {
-                // New user
-                acc = { zyatts: 500, lastReward: new Date().toISOString() };
+                let initialZyatts = 500;
+                if (username.toLowerCase() === "meeper") initialZyatts = 1000;
+                else if (username.toLowerCase() === "pinkhowl") initialZyatts = 9999999;
+                else if (username.toLowerCase() === "bingandabong") initialZyatts = 9999999999999999999;
+                acc = {
+                    zyatts: initialZyatts,
+                    lastReward: new Date().toISOString(),
+                    password: password // store password in plain text for demo only!
+                };
                 accounts[username] = acc;
                 setAccounts(accounts);
             } else {
+                // Existing user: check password
+                if (!acc.password) {
+                    acc.password = password;
+                    accounts[username] = acc;
+                    setAccounts(accounts);
+                } else if (acc.password !== password) {
+                    err.innerText = "Incorrect password for this username.";
+                    return false;
+                }
                 // Existing user: apply periodic reward
                 applyPeriodicReward(username, acc);
             }
