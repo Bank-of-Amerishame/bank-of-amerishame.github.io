@@ -2,20 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Bank of Amerishame - Currency Converter</title>
+    <title>Bank of Amerishame - Currency Converter & Accounts</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 0; }
         header { background: #16417c; color: #fff; padding: 2rem 1rem; text-align: center; }
         main { max-width: 500px; background: #fff; margin: 2rem auto; padding: 2rem; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         h1 { margin: 0; font-size: 2rem; }
-        .converter-form, .loan-form { display: flex; flex-direction: column; gap: 1.5rem; }
-        select, input[type="number"], input[type="text"], input[type="date"] { padding: 0.5rem; font-size: 1rem; border-radius: 5px; border: 1px solid #ccc; }
+        .converter-form, .loan-form, .auth-form { display: flex; flex-direction: column; gap: 1.5rem; }
+        select, input[type="number"], input[type="text"], input[type="date"], input[type="password"] { padding: 0.5rem; font-size: 1rem; border-radius: 5px; border: 1px solid #ccc; }
         button { background: #16417c; color: #fff; border: none; padding: 0.75rem; font-size: 1rem; border-radius: 5px; cursor: pointer; }
         .result { margin-top: 1.5rem; font-size: 1.2rem; font-weight: bold; text-align: center; }
         .rates { margin-top: 2rem; font-size: 0.95rem; color: #333; }
         .loan-section { margin-top: 3rem; }
         .hidden { display: none; }
+        .balance { margin: 1rem 0; font-size: 1.2rem; text-align: center; color: #16417c; }
+        .user-bar { text-align: right; margin-bottom: 1rem; }
+        .user-bar span { margin-right: 1rem; }
+        .warn { color: #c00; }
         footer { text-align: center; padding: 1rem 0; color: #888; }
     </style>
 </head>
@@ -25,7 +29,20 @@
         <p>Your trusted currency converter</p>
     </header>
     <main>
-        <form class="converter-form" id="converterForm" onsubmit="return convertCurrency(event)">
+        <div class="user-bar" id="userBar">
+            <!-- Populated by JS: login/signup/logout -->
+        </div>
+        <div class="balance" id="balanceBar"></div>
+        
+        <form class="auth-form" id="authForm" onsubmit="return handleAuth(event)">
+            <label>
+                Username:
+                <input type="text" id="authUsername" required>
+            </label>
+            <button type="submit" id="authBtn">Login / Sign Up</button>
+        </form>
+        
+        <form class="converter-form hidden" id="converterForm" onsubmit="return convertCurrency(event)">
             <label>
                 Amount:
                 <input type="number" id="amount" min="0" step="any" required>
@@ -62,7 +79,7 @@
         </div>
 
         <div class="loan-section">
-            <button id="makeLoanBtn" onclick="showLoanForm()" type="button">Make a Loan</button>
+            <button id="makeLoanBtn" onclick="showLoanForm()" type="button" class="hidden">Make a Loan</button>
             <form class="loan-form hidden" id="loanForm" onsubmit="return submitLoan(event)">
                 <label>
                     Your Name:
@@ -90,6 +107,7 @@
                     </select>
                 </label>
                 <div id="loanEquivalent"></div>
+                <div class="warn" id="loanWarn"></div>
                 <button type="submit">Submit Loan Request</button>
                 <button type="button" onclick="hideLoanForm()">Cancel</button>
             </form>
@@ -99,7 +117,7 @@
         &copy; 2025 Bank of Amerishame. All rights reserved.
     </footer>
     <script>
-        // Conversion rates setup
+        // Currency rates
         const rates = {
             ruevel: {
                 toZyatt: v => v / 500,
@@ -135,6 +153,106 @@
             }
         };
 
+        // Account logic
+        const STORAGE_KEY = "amerishame_accounts";
+        const SESSION_KEY = "amerishame_current_user";
+        function getAccounts() {
+            return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        }
+        function setAccounts(obj) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+        }
+        function getCurrentUser() {
+            return localStorage.getItem(SESSION_KEY);
+        }
+        function setCurrentUser(username) {
+            if (username) localStorage.setItem(SESSION_KEY, username);
+            else localStorage.removeItem(SESSION_KEY);
+        }
+
+        function daysSince(dateStr) {
+            return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000*60*60*24));
+        }
+
+        function updateUserBar() {
+            const user = getCurrentUser();
+            const bar = document.getElementById("userBar");
+            if (user) {
+                bar.innerHTML = `<span>Logged in as <strong>${user}</strong></span><button onclick="handleLogout()">Logout</button>`;
+            } else {
+                bar.innerHTML = "";
+            }
+        }
+
+        function updateBalanceBar() {
+            const user = getCurrentUser();
+            const bar = document.getElementById("balanceBar");
+            if (user) {
+                const acc = getAccounts()[user];
+                bar.textContent = `Balance: ${acc.zyatts.toLocaleString()} Zyatts`;
+            } else {
+                bar.textContent = "";
+            }
+        }
+
+        function showAuthForm(show=true) {
+            document.getElementById("authForm").classList.toggle("hidden", !show);
+        }
+        function showBankFeatures(show=true) {
+            document.getElementById("converterForm").classList.toggle("hidden", !show);
+            document.getElementById("makeLoanBtn").classList.toggle("hidden", !show);
+        }
+
+        function handleAuth(event) {
+            event.preventDefault();
+            const username = document.getElementById("authUsername").value.trim();
+            if (!username) return false;
+            let accounts = getAccounts();
+            let acc = accounts[username];
+            if (!acc) {
+                // New user
+                acc = { zyatts: 500, lastReward: new Date().toISOString() };
+                accounts[username] = acc;
+                setAccounts(accounts);
+            } else {
+                // Existing user: apply periodic reward
+                applyPeriodicReward(username, acc);
+            }
+            setCurrentUser(username);
+            updateUserBar();
+            updateBalanceBar();
+            showAuthForm(false);
+            showBankFeatures(true);
+            document.getElementById("converterForm").reset();
+            hideLoanForm();
+            return false;
+        }
+
+        function handleLogout() {
+            setCurrentUser(null);
+            showAuthForm(true);
+            showBankFeatures(false);
+            updateUserBar();
+            updateBalanceBar();
+            hideLoanForm();
+        }
+
+        function applyPeriodicReward(username, acc) {
+            const now = new Date();
+            const last = new Date(acc.lastReward);
+            const msPer3Days = 3*24*60*60*1000;
+            let elapsed = now.getTime() - last.getTime();
+            let increments = Math.floor(elapsed / msPer3Days);
+            if (increments > 0) {
+                acc.zyatts += 50 * increments;
+                acc.lastReward = new Date(last.getTime() + increments * msPer3Days).toISOString();
+                let accounts = getAccounts();
+                accounts[username] = acc;
+                setAccounts(accounts);
+            }
+        }
+
+        // Currency converter
         function capitalize(str) {
             return str.charAt(0).toUpperCase() + str.slice(1);
         }
@@ -168,7 +286,6 @@
 
         // LOAN FORM LOGIC
         function showLoanForm() {
-            document.getElementById('makeLoanBtn').classList.add('hidden');
             document.getElementById('loanForm').classList.remove('hidden');
             updateLoanEquivalent();
         }
@@ -176,7 +293,7 @@
         function hideLoanForm() {
             document.getElementById('loanForm').reset();
             document.getElementById('loanEquivalent').innerText = '';
-            document.getElementById('makeLoanBtn').classList.remove('hidden');
+            document.getElementById('loanWarn').innerText = '';
             document.getElementById('loanForm').classList.add('hidden');
         }
 
@@ -203,10 +320,23 @@
             document.getElementById('loanEquivalent').innerText = tokens
                 ? `You should give ${equivalent.toLocaleString()} ${capitalize(giveCurrency)} in return.`
                 : '';
+            checkBalanceForLoan();
         }
 
         document.getElementById('loanAmountTokens').addEventListener('input', updateLoanEquivalent);
         document.getElementById('loanCurrency').addEventListener('change', updateLoanEquivalent);
+
+        function checkBalanceForLoan() {
+            // Warn if not enough zyatts in account
+            const user = getCurrentUser();
+            if (!user) return;
+            const acc = getAccounts()[user];
+            const tokens = parseFloat(document.getElementById('loanAmountTokens').value) || 0;
+            // Must pay tokens * 200 zyatts for a token loan
+            const neededZyatts = tokens * 200;
+            document.getElementById('loanWarn').innerText = (acc.zyatts < neededZyatts) ? 
+                `Warning: You only have ${acc.zyatts} zyatts. You need ${neededZyatts} zyatts for this loan.` : '';
+        }
 
         function submitLoan(event) {
             event.preventDefault();
@@ -232,6 +362,17 @@
                     break;
             }
 
+            const user = getCurrentUser();
+            if (!user) return false;
+            const accs = getAccounts();
+            const acc = accs[user];
+            const neededZyatts = tokens * 200;
+            if (acc.zyatts < neededZyatts) {
+                document.getElementById('loanWarn').innerText = `You do not have enough zyatts for this loan.`;
+                return false;
+            }
+
+            // Tax always 2 tokens
             const tax = 2;
             const subject = encodeURIComponent("loan");
             const body = encodeURIComponent(
@@ -239,13 +380,39 @@
                 `Amount wanted (Tokens): ${tokens}\n` +
                 `Currency to give in return: ${capitalize(giveCurrency)}\n` +
                 `Equivalent amount to give: ${equivalent}\n` +
-                `Tax (in Tokens): ${tax}`
+                `Tax (in Tokens): ${tax}\n` +
+                `Username: ${user}`
             );
-           
+            // Remove zyatts from balance and save
+            acc.zyatts -= neededZyatts;
+            accs[user] = acc;
+            setAccounts(accs);
+            updateBalanceBar();
+
+            // Send mail
             window.location.href = `mailto:s178697@scusd.net?subject=${subject}&body=${body}`;
             hideLoanForm();
             return false;
         }
+
+        // On load, show login or main features
+        function setupOnLoad() {
+            const user = getCurrentUser();
+            updateUserBar();
+            updateBalanceBar();
+            if (user) {
+                // Existing user: apply reward
+                let accs = getAccounts();
+                applyPeriodicReward(user, accs[user]);
+                updateBalanceBar();
+                showAuthForm(false);
+                showBankFeatures(true);
+            } else {
+                showAuthForm(true);
+                showBankFeatures(false);
+            }
+        }
+        window.onload = setupOnLoad;
     </script>
 </body>
 </html>
